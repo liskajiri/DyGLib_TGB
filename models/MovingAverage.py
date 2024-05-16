@@ -20,7 +20,9 @@ class MovingAverage:
         :return:
         """
         if node_id in self.memory:
-            self.memory[node_id] = (self.memory[node_id] * (self.window_size - 1) + node_label) / self.window_size
+            self.memory[node_id] = (
+                self.memory[node_id] * (self.window_size - 1) + node_label
+            ) / self.window_size
         else:
             self.memory[node_id] = node_label
 
@@ -31,4 +33,8 @@ class MovingAverage:
         :return:
         """
         # if the memory does not exist, return zero vector
-        return self.memory[node_id] if node_id in self.memory else np.zeros(self.num_classes)
+        return (
+            self.memory[node_id]
+            if node_id in self.memory
+            else np.zeros(self.num_classes)
+        )

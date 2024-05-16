@@ -26,4 +26,8 @@ class PersistentForecast:
         :return:
         """
         # if the memory does not exist, return zero vector
-        return self.memory[node_id] if node_id in self.memory else np.zeros(self.num_classes)
+        return (
+            self.memory[node_id]
+            if node_id in self.memory
+            else np.zeros(self.num_classes)
+        )

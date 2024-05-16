@@ -353,7 +353,7 @@ def get_node_classification_tgb_data(dataset_name: str):
             labeled_node_interaction_indices.keys()
         ), "Mismatched dictionary keys!"
 
-        os.makedirs(f"./saved_labeled_node_interaction_indices", exist_ok=True)
+        os.makedirs("./saved_labeled_node_interaction_indices", exist_ok=True)
         np.save(
             f"./saved_labeled_node_interaction_indices/{dataset_name}.npy",
             labeled_node_interaction_indices,

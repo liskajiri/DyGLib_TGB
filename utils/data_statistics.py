@@ -11,7 +11,7 @@ data_num_nodes_map = {
     "tgbl-flight": 18143,
     "tgbn-trade": 255,
     "tgbn-genre": 992,
-    "tgbn-reddit": 11068
+    "tgbn-reddit": 11068,
 }
 
 data_num_edges_map = {
@@ -22,20 +22,26 @@ data_num_edges_map = {
     "tgbl-flight": 67169570,
     "tgbn-trade": 507497,
     "tgbn-genre": 17858395,
-    "tgbn-reddit": 27174118
+    "tgbn-reddit": 27174118,
 }
 
 
-for dataset_name in ["tgbl-wiki", "tgbl-review", "tgbl-coin", "tgbl-comment", "tgbl-flight"]:
+for dataset_name in [
+    "tgbl-wiki",
+    "tgbl-review",
+    "tgbl-coin",
+    "tgbl-comment",
+    "tgbl-flight",
+]:
     dataset = LinkPropPredDataset(name=dataset_name, root="datasets")
     data = dataset.full_data
 
-    src_node_ids = data['sources'].astype(np.longlong)
-    dst_node_ids = data['destinations'].astype(np.longlong)
-    node_interact_times = data['timestamps'].astype(np.float64)
-    edge_ids = data['edge_idxs'].astype(np.longlong)
-    labels = data['edge_label']
-    edge_raw_features = data['edge_feat'].astype(np.float64)
+    src_node_ids = data["sources"].astype(np.longlong)
+    dst_node_ids = data["destinations"].astype(np.longlong)
+    node_interact_times = data["timestamps"].astype(np.float64)
+    edge_ids = data["edge_idxs"].astype(np.longlong)
+    labels = data["edge_label"]
+    edge_raw_features = data["edge_feat"].astype(np.float64)
 
     print("==========================")
     print(f"statistics on {dataset_name}:")
@@ -45,30 +51,36 @@ for dataset_name in ["tgbl-wiki", "tgbl-review", "tgbl-coin", "tgbl-comment", "t
     print(f"maximal node index: {max(src_node_ids.max(), dst_node_ids.max())}")
 
     num_edges = edge_raw_features.shape[0]
-    print(f"actual number of edges: {num_edges}", )
+    print(
+        f"actual number of edges: {num_edges}",
+    )
     print(f"reported number of edges:  {data_num_edges_map[dataset_name]}")
-    assert num_edges == data_num_edges_map[dataset_name], 'Number of edges are not matched!'
+    assert (
+        num_edges == data_num_edges_map[dataset_name]
+    ), "Number of edges are not matched!"
     # union to get node set
     num_nodes = len(set(src_node_ids) | set(dst_node_ids))
     print(f"actual number of nodes: {num_nodes}")
     print(f"reported number of nodes: {data_num_nodes_map[dataset_name]}")
-    assert num_nodes == data_num_nodes_map[dataset_name], 'Number of nodes are not matched!'
+    assert (
+        num_nodes == data_num_nodes_map[dataset_name]
+    ), "Number of nodes are not matched!"
 
     print(f"shape of edge features: {edge_raw_features.shape}")
-    if 'node_feat' in data.keys():
-        node_raw_features = data['node_feat'].astype(np.float64)
+    if "node_feat" in data.keys():
+        node_raw_features = data["node_feat"].astype(np.float64)
         print(f"shape of node features: {edge_raw_features.shape}")
 
 for dataset_name in ["tgbn-trade", "tgbn-genre", "tgbn-reddit"]:
     dataset = PyGNodePropPredDataset(name=dataset_name, root="datasets")
     data = dataset.dataset.full_data
 
-    src_node_ids = data['sources'].astype(np.longlong)
-    dst_node_ids = data['destinations'].astype(np.longlong)
-    node_interact_times = data['timestamps'].astype(np.float64)
-    edge_ids = data['edge_idxs'].astype(np.longlong)
-    labels = data['edge_label']
-    edge_raw_features = data['edge_feat'].astype(np.float64)
+    src_node_ids = data["sources"].astype(np.longlong)
+    dst_node_ids = data["destinations"].astype(np.longlong)
+    node_interact_times = data["timestamps"].astype(np.float64)
+    edge_ids = data["edge_idxs"].astype(np.longlong)
+    labels = data["edge_label"]
+    edge_raw_features = data["edge_feat"].astype(np.float64)
 
     print("==========================")
     print(f"statistics on {dataset_name}:")
@@ -78,7 +90,9 @@ for dataset_name in ["tgbn-trade", "tgbn-genre", "tgbn-reddit"]:
     print(f"maximal node index: {max(src_node_ids.max(), dst_node_ids.max())}")
 
     num_edges = edge_raw_features.shape[0]
-    print(f"actual number of edges: {num_edges}", )
+    print(
+        f"actual number of edges: {num_edges}",
+    )
     print(f"reported number of edges:  {data_num_edges_map[dataset_name]}")
     # assert num_edges == data_num_edges_map[dataset_name], 'Number of edges are not matched!'
     # union to get node set
@@ -88,8 +102,8 @@ for dataset_name in ["tgbn-trade", "tgbn-genre", "tgbn-reddit"]:
     # assert num_nodes == data_num_nodes_map[dataset_name], 'Number of nodes are not matched!'
 
     print(f"shape of edge features: {edge_raw_features.shape}")
-    if 'node_feat' in data.keys():
-        node_raw_features = data['node_feat'].astype(np.float64)
+    if "node_feat" in data.keys():
+        node_raw_features = data["node_feat"].astype(np.float64)
         print(f"shape of node features: {edge_raw_features.shape}")
 
 # ==========================

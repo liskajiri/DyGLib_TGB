@@ -1,0 +1,22 @@
+[project]
+name = "DyGLib_TGB_BP"
+version = "0.1.0"
+description = "A modification of DyGLib_TGB with a temporal OGB dataset"
+authors = ["liskajiri <70215056+liskajiri@users.noreply.github.com>"]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tasks]
+train_arxiv = "python train_node_classification.py --dataset_name ogbn-arxiv" 
+train_tgbn_trade = "python train_node_classification.py" 
+
+[dependencies]
+python = "3.11.*"
+pytorch = ">=2.3.0,<2.4"
+tqdm = ">=4.66.4,<4.67"
+wandb = ">=0.16.5,<0.17"
+ruff = ">=0.4.4,<0.5"
+
+[pypi-dependencies]
+py-tgb = { version = ">=0.9"}
+ogb = "*"

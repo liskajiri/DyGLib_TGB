@@ -158,6 +158,41 @@ class FullModel(torch.nn.Module):
         return self.model(x)
 
 
+def compute_train_metric(
+    train_predicts_per_timeslot_dict, train_labels_per_timeslot_dict
+):
+    # compute the train metric for each timeslot
+    for time_slot in tqdm(train_predicts_per_timeslot_dict):
+        time_slot_predictions = np.stack(
+            train_predicts_per_timeslot_dict[time_slot], axis=0
+        )
+        time_slot_labels = np.stack(train_labels_per_timeslot_dict[time_slot], axis=0)
+        if args.dataset_name == "ogbn-arxiv":
+            time_slot_labels, time_slot_predictions = (
+                convert_ogb_predictions_from_one_hot(
+                    time_slot_labels, time_slot_predictions
+                )
+            )
+
+        # compute metric
+        input_dict = {
+            "y_true": time_slot_labels,
+            "y_pred": time_slot_predictions,
+            "eval_metric": [eval_metric_name],
+        }
+        eval_metric_result = evaluator.eval(input_dict)[eval_metric_name]
+        train_metrics.append({eval_metric_name: eval_metric_result})
+        wandb.log({f"train/{eval_metric_name}": eval_metric_result})
+    return train_metrics
+
+
+def log_metrics(metrics, stage: str):
+    for metric_name in metrics[0].keys():
+        mean_metric = np.mean([val_metric[metric_name] for val_metric in metrics])
+        logger.info(f"{stage} {metric_name}, {mean_metric:.4f}")
+        wandb.log({f"{stage}/{metric_name}": mean_metric})
+
+
 if __name__ == "__main__":
     warnings.filterwarnings("ignore")
 
@@ -264,11 +299,6 @@ if __name__ == "__main__":
         logger.info(f"********** Run {run + 1} starts. **********")
 
         logger.info(f"configuration is {args}")
-        # node_classifier = MLPClassifier(
-        #     input_dim=args.output_dim, output_dim=num_classes, dropout=args.dropout
-        # )
-
-        # model = nn.Sequential(dynamic_backbone, node_classifier)
 
         dynamic_backbone = create_model(
             args=args,
@@ -279,7 +309,7 @@ if __name__ == "__main__":
         )
 
         model = FullModel(dynamic_backbone, args)
-        model = torch.compile(model, fullgraph=True, dynamic=False)
+        model = torch.compile(model)
 
         logger.info(f"model -> {model}")
         logger.info(
@@ -435,7 +465,7 @@ if __name__ == "__main__":
                     loss = loss_func(
                         input=predicts[train_idx], target=labels[train_idx]
                     )
-                    wandb.log({"train/loss": loss.item()})
+                    wandb.log({"train/loss": sum(train_losses) / batch_idx})
 
                     train_losses.append(loss.item())
                     # append the predictions and labels to train_predicts_per_timeslot_dict and train_labels_per_timeslot_dict
@@ -452,75 +482,48 @@ if __name__ == "__main__":
                     optimizer.step()
 
                     train_idx_data_loader_tqdm.set_description(
-                        f"Epoch: {epoch + 1}, train for the {batch_idx + 1}-th batch, train loss: {loss.item()}"
+                        f"Epoch: {epoch + 1}, train for the {batch_idx + 1}-th batch, train loss: {sum(train_losses) / batch_idx:.4f}"
                     )
 
                 if args.model_name in ["JODIE", "DyRep", "TGN"]:
                     # detach the memories and raw messages of nodes in the memory bank after each batch, so we don't back propagate to the start of time
                     model.dynamic_backbone.memory_bank.detach_memory_bank()
 
-            # compute the train metric for each timeslot
-            for time_slot in tqdm(train_predicts_per_timeslot_dict):
-                time_slot_predictions = np.stack(
-                    train_predicts_per_timeslot_dict[time_slot], axis=0
-                )
-                time_slot_labels = np.stack(
-                    train_labels_per_timeslot_dict[time_slot], axis=0
-                )
-                if args.dataset_name == "ogbn-arxiv":
-                    time_slot_labels, time_slot_predictions = (
-                        convert_ogb_predictions_from_one_hot(
-                            time_slot_labels, time_slot_predictions
-                        )
-                    )
+            wandb.log({"train/loss": sum(train_losses) / len(train_idx_data_loader)})
 
-                # compute metric
-                input_dict = {
-                    "y_true": time_slot_labels,
-                    "y_pred": time_slot_predictions,
-                    "eval_metric": [eval_metric_name],
-                }
-                eval_metric_result = evaluator.eval(input_dict)[eval_metric_name]
-                train_metrics.append({eval_metric_name: eval_metric_result})
-                wandb.log({f"train/{eval_metric_name}": eval_metric_result})
-
-            val_losses, val_metrics = evaluate_model_node_classification(
-                model_name=args.model_name,
-                model=model,
-                neighbor_sampler=full_neighbor_sampler,
-                evaluate_idx_data_loader=val_idx_data_loader,
-                evaluate_data=val_data,
-                eval_stage="val",
-                eval_metric_name=eval_metric_name,
-                evaluator=evaluator,
-                loss_func=loss_func,
-                num_neighbors=args.num_neighbors,
-                time_gap=args.time_gap,
+            train_metrics = compute_train_metric(
+                train_predicts_per_timeslot_dict, train_labels_per_timeslot_dict
             )
-            for metric_name in val_metrics[0].keys():
-                metric = np.mean(
-                    [val_metric[metric_name] for val_metric in val_metrics]
-                )
-                wandb.log({f"val/{metric_name}": metric})
 
-            if args.model_name in ["JODIE", "DyRep", "TGN"]:
-                # backup memory bank after validating so it can be used for testing nodes (since test edges are strictly later in time than validation edges)
-                val_backup_memory_bank = (
-                    model.dynamic_backbone.memory_bank.backup_memory_bank()
+            if (epoch + 1) % (args.test_interval_epochs // 2) == 0:
+                val_losses, val_metrics = evaluate_model_node_classification(
+                    model_name=args.model_name,
+                    model=model,
+                    neighbor_sampler=full_neighbor_sampler,
+                    evaluate_idx_data_loader=val_idx_data_loader,
+                    evaluate_data=val_data,
+                    eval_stage="val",
+                    eval_metric_name=eval_metric_name,
+                    evaluator=evaluator,
+                    loss_func=loss_func,
+                    num_neighbors=args.num_neighbors,
+                    time_gap=args.time_gap,
                 )
+
+                log_metrics(val_metrics, "val")
+                logger.info(f"validate loss: {np.mean(val_losses):.4f}")
+
+                if args.model_name in ["JODIE", "DyRep", "TGN"]:
+                    # backup memory bank after validating so it can be used for testing nodes (since test edges are strictly later in time than validation edges)
+                    val_backup_memory_bank = (
+                        model.dynamic_backbone.memory_bank.backup_memory_bank()
+                    )
 
             logger.info(
                 f'Epoch: {epoch + 1}, learning rate: {optimizer.param_groups[0]["lr"]}, train loss: {np.mean(train_losses):.4f}'
             )
-            for metric_name in train_metrics[0].keys():
-                logger.info(
-                    f"train {metric_name}, {np.mean([train_metric[metric_name] for train_metric in train_metrics]):.4f}"
-                )
-            logger.info(f"validate loss: {np.mean(val_losses):.4f}")
-            for metric_name in val_metrics[0].keys():
-                logger.info(
-                    f"validate {metric_name}, {np.mean([val_metric[metric_name] for val_metric in val_metrics]):.4f}"
-                )
+
+            log_metrics(train_metrics, "train")
 
             # perform testing once after test_interval_epochs
             if (epoch + 1) % args.test_interval_epochs == 0:
@@ -546,12 +549,8 @@ if __name__ == "__main__":
                     )
 
                 logger.info(f"test loss: {np.mean(test_losses):.4f}")
-                for metric_name in test_metrics[0].keys():
-                    mean_metric = np.mean(
-                        [test_metric[metric_name] for test_metric in test_metrics]
-                    )
-                    logger.info(f"test {metric_name}, {mean_metric:.4f}")
-                    wandb.log({f"test/{metric_name}": mean_metric})
+
+                log_metrics(test_metrics, "test")
 
             # select the best model based on all the validate metrics
             val_metric_indicator = []
