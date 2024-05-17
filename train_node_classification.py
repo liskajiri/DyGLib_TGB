@@ -200,7 +200,7 @@ if __name__ == "__main__":
     args = get_node_classification_args(is_evaluation=False)
 
     wandb.login()
-    wandb.init(project=args.dataset_name, config=args)
+    wandb.init(project=args.dataset_name, config=args, name=args.model_name)
 
     # get data for training, validation and testing
     if args.dataset_name == "ogbn-arxiv":
@@ -319,7 +319,7 @@ if __name__ == "__main__":
 
         # follow previous work, we freeze the dynamic_backbone and only optimize the node_classifier
         optimizer = create_optimizer(
-            model=model,  # model[1]
+            model=model,
             optimizer_name=args.optimizer,
             learning_rate=args.learning_rate,
             weight_decay=args.weight_decay,
@@ -465,7 +465,7 @@ if __name__ == "__main__":
                     loss = loss_func(
                         input=predicts[train_idx], target=labels[train_idx]
                     )
-                    wandb.log({"train/loss": sum(train_losses) / batch_idx})
+                    wandb.log({"train/loss": loss.item()})
 
                     train_losses.append(loss.item())
                     # append the predictions and labels to train_predicts_per_timeslot_dict and train_labels_per_timeslot_dict
@@ -489,35 +489,36 @@ if __name__ == "__main__":
                     # detach the memories and raw messages of nodes in the memory bank after each batch, so we don't back propagate to the start of time
                     model.dynamic_backbone.memory_bank.detach_memory_bank()
 
-            wandb.log({"train/loss": sum(train_losses) / len(train_idx_data_loader)})
+            wandb.log(
+                {"train/loss_epoch": sum(train_losses) / len(train_idx_data_loader)}
+            )
 
             train_metrics = compute_train_metric(
                 train_predicts_per_timeslot_dict, train_labels_per_timeslot_dict
             )
 
-            if (epoch + 1) % (args.test_interval_epochs // 2) == 0:
-                val_losses, val_metrics = evaluate_model_node_classification(
-                    model_name=args.model_name,
-                    model=model,
-                    neighbor_sampler=full_neighbor_sampler,
-                    evaluate_idx_data_loader=val_idx_data_loader,
-                    evaluate_data=val_data,
-                    eval_stage="val",
-                    eval_metric_name=eval_metric_name,
-                    evaluator=evaluator,
-                    loss_func=loss_func,
-                    num_neighbors=args.num_neighbors,
-                    time_gap=args.time_gap,
+            val_losses, val_metrics = evaluate_model_node_classification(
+                model_name=args.model_name,
+                model=model,
+                neighbor_sampler=full_neighbor_sampler,
+                evaluate_idx_data_loader=val_idx_data_loader,
+                evaluate_data=val_data,
+                eval_stage="val",
+                eval_metric_name=eval_metric_name,
+                evaluator=evaluator,
+                loss_func=loss_func,
+                num_neighbors=args.num_neighbors,
+                time_gap=args.time_gap,
+            )
+
+            log_metrics(val_metrics, "val")
+            logger.info(f"validate loss: {np.mean(val_losses):.4f}")
+
+            if args.model_name in ["JODIE", "DyRep", "TGN"]:
+                # backup memory bank after validating so it can be used for testing nodes (since test edges are strictly later in time than validation edges)
+                val_backup_memory_bank = (
+                    model.dynamic_backbone.memory_bank.backup_memory_bank()
                 )
-
-                log_metrics(val_metrics, "val")
-                logger.info(f"validate loss: {np.mean(val_losses):.4f}")
-
-                if args.model_name in ["JODIE", "DyRep", "TGN"]:
-                    # backup memory bank after validating so it can be used for testing nodes (since test edges are strictly later in time than validation edges)
-                    val_backup_memory_bank = (
-                        model.dynamic_backbone.memory_bank.backup_memory_bank()
-                    )
 
             logger.info(
                 f'Epoch: {epoch + 1}, learning rate: {optimizer.param_groups[0]["lr"]}, train loss: {np.mean(train_losses):.4f}'
