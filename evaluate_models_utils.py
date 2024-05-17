@@ -52,7 +52,7 @@ def evaluate_model_link_prediction(
     """
     if model_name in ["DyRep", "TGAT", "TGN", "CAWN", "TCL", "GraphMixer", "DyGFormer"]:
         # evaluation phase use all the graph information
-        model[0].set_neighbor_sampler(neighbor_sampler)
+        model.dynamic_backbone.set_neighbor_sampler(neighbor_sampler)
 
     model.eval()
 
@@ -106,103 +106,105 @@ def evaluate_model_link_prediction(
             if model_name in ["TGAT", "CAWN", "TCL"]:
                 # get temporal embedding of source and destination nodes
                 # two Tensors, with shape (batch_size, output_dim)
-                src_node_embeddings, dst_node_embeddings = model[
-                    0
-                ].compute_src_dst_node_temporal_embeddings(
-                    src_node_ids=batch_src_node_ids,
-                    dst_node_ids=batch_dst_node_ids,
-                    node_interact_times=batch_node_interact_times,
-                    num_neighbors=num_neighbors,
+                src_node_embeddings, dst_node_embeddings = (
+                    model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
+                        src_node_ids=batch_src_node_ids,
+                        dst_node_ids=batch_dst_node_ids,
+                        node_interact_times=batch_node_interact_times,
+                        num_neighbors=num_neighbors,
+                    )
                 )
 
                 # get temporal embedding of negative source and negative destination nodes
                 # two Tensors, with shape (batch_size * num_negative_samples_per_node, output_dim)
-                neg_src_node_embeddings, neg_dst_node_embeddings = model[
-                    0
-                ].compute_src_dst_node_temporal_embeddings(
-                    src_node_ids=repeated_batch_src_node_ids,
-                    dst_node_ids=batch_neg_dst_node_ids.flatten(),
-                    node_interact_times=repeated_batch_node_interact_times,
-                    num_neighbors=num_neighbors,
+                neg_src_node_embeddings, neg_dst_node_embeddings = (
+                    model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
+                        src_node_ids=repeated_batch_src_node_ids,
+                        dst_node_ids=batch_neg_dst_node_ids.flatten(),
+                        node_interact_times=repeated_batch_node_interact_times,
+                        num_neighbors=num_neighbors,
+                    )
                 )
             elif model_name in ["JODIE", "DyRep", "TGN"]:
                 # note that negative nodes do not change the memories while the positive nodes change the memories,
                 # we need to first compute the embeddings of negative nodes for memory-based models
                 # get temporal embedding of negative source and negative destination nodes
                 # two Tensors, with shape (batch_size * num_negative_samples_per_node, output_dim)
-                neg_src_node_embeddings, neg_dst_node_embeddings = model[
-                    0
-                ].compute_src_dst_node_temporal_embeddings(
-                    src_node_ids=repeated_batch_src_node_ids,
-                    dst_node_ids=batch_neg_dst_node_ids.flatten(),
-                    node_interact_times=repeated_batch_node_interact_times,
-                    edge_ids=None,
-                    edges_are_positive=False,
-                    num_neighbors=num_neighbors,
+                neg_src_node_embeddings, neg_dst_node_embeddings = (
+                    model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
+                        src_node_ids=repeated_batch_src_node_ids,
+                        dst_node_ids=batch_neg_dst_node_ids.flatten(),
+                        node_interact_times=repeated_batch_node_interact_times,
+                        edge_ids=None,
+                        edges_are_positive=False,
+                        num_neighbors=num_neighbors,
+                    )
                 )
 
                 # get temporal embedding of source and destination nodes
                 # two Tensors, with shape (batch_size, output_dim)
-                src_node_embeddings, dst_node_embeddings = model[
-                    0
-                ].compute_src_dst_node_temporal_embeddings(
-                    src_node_ids=batch_src_node_ids,
-                    dst_node_ids=batch_dst_node_ids,
-                    node_interact_times=batch_node_interact_times,
-                    edge_ids=batch_edge_ids,
-                    edges_are_positive=True,
-                    num_neighbors=num_neighbors,
+                src_node_embeddings, dst_node_embeddings = (
+                    model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
+                        src_node_ids=batch_src_node_ids,
+                        dst_node_ids=batch_dst_node_ids,
+                        node_interact_times=batch_node_interact_times,
+                        edge_ids=batch_edge_ids,
+                        edges_are_positive=True,
+                        num_neighbors=num_neighbors,
+                    )
                 )
             elif model_name in ["GraphMixer"]:
                 # get temporal embedding of source and destination nodes
                 # two Tensors, with shape (batch_size, output_dim)
-                src_node_embeddings, dst_node_embeddings = model[
-                    0
-                ].compute_src_dst_node_temporal_embeddings(
-                    src_node_ids=batch_src_node_ids,
-                    dst_node_ids=batch_dst_node_ids,
-                    node_interact_times=batch_node_interact_times,
-                    num_neighbors=num_neighbors,
-                    time_gap=time_gap,
+                src_node_embeddings, dst_node_embeddings = (
+                    model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
+                        src_node_ids=batch_src_node_ids,
+                        dst_node_ids=batch_dst_node_ids,
+                        node_interact_times=batch_node_interact_times,
+                        num_neighbors=num_neighbors,
+                        time_gap=time_gap,
+                    )
                 )
 
                 # get temporal embedding of negative source and negative destination nodes
                 # two Tensors, with shape (batch_size * num_negative_samples_per_node, output_dim)
-                neg_src_node_embeddings, neg_dst_node_embeddings = model[
-                    0
-                ].compute_src_dst_node_temporal_embeddings(
-                    src_node_ids=repeated_batch_src_node_ids,
-                    dst_node_ids=batch_neg_dst_node_ids.flatten(),
-                    node_interact_times=repeated_batch_node_interact_times,
-                    num_neighbors=num_neighbors,
-                    time_gap=time_gap,
+                neg_src_node_embeddings, neg_dst_node_embeddings = (
+                    model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
+                        src_node_ids=repeated_batch_src_node_ids,
+                        dst_node_ids=batch_neg_dst_node_ids.flatten(),
+                        node_interact_times=repeated_batch_node_interact_times,
+                        num_neighbors=num_neighbors,
+                        time_gap=time_gap,
+                    )
                 )
             elif model_name in ["DyGFormer"]:
                 # get temporal embedding of source and destination nodes
                 # two Tensors, with shape (batch_size, output_dim)
-                src_node_embeddings, dst_node_embeddings = model[
-                    0
-                ].compute_src_dst_node_temporal_embeddings(
-                    src_node_ids=batch_src_node_ids,
-                    dst_node_ids=batch_dst_node_ids,
-                    node_interact_times=batch_node_interact_times,
+                src_node_embeddings, dst_node_embeddings = (
+                    model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
+                        src_node_ids=batch_src_node_ids,
+                        dst_node_ids=batch_dst_node_ids,
+                        node_interact_times=batch_node_interact_times,
+                    )
                 )
 
                 # get temporal embedding of negative source and negative destination nodes
                 # two Tensors, with shape (batch_size * num_negative_samples_per_node, output_dim)
-                neg_src_node_embeddings, neg_dst_node_embeddings = model[
-                    0
-                ].compute_src_dst_node_temporal_embeddings(
-                    src_node_ids=repeated_batch_src_node_ids,
-                    dst_node_ids=batch_neg_dst_node_ids.flatten(),
-                    node_interact_times=repeated_batch_node_interact_times,
+                neg_src_node_embeddings, neg_dst_node_embeddings = (
+                    model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
+                        src_node_ids=repeated_batch_src_node_ids,
+                        dst_node_ids=batch_neg_dst_node_ids.flatten(),
+                        node_interact_times=repeated_batch_node_interact_times,
+                    )
                 )
             else:
                 raise ValueError(f"Wrong value for model_name {model_name}!")
 
             # get positive probabilities, Tensor, shape (batch_size, )
             positive_probabilities = (
-                model[1](input_1=src_node_embeddings, input_2=dst_node_embeddings)
+                model.link_predictor(
+                    input_1=src_node_embeddings, input_2=dst_node_embeddings
+                )
                 .squeeze(dim=-1)
                 .sigmoid()
                 .cpu()
@@ -210,7 +212,7 @@ def evaluate_model_link_prediction(
             )
             # get negative probabilities, Tensor, shape (batch_size * num_negative_samples_per_node, )
             negative_probabilities = (
-                model[1](
+                model.link_predictor(
                     input_1=neg_src_node_embeddings, input_2=neg_dst_node_embeddings
                 )
                 .squeeze(dim=-1)
@@ -340,36 +342,36 @@ def evaluate_model_node_classification(
                     if model_name in ["TGAT", "CAWN", "TCL"]:
                         # get temporal embedding of source and destination nodes
                         # two Tensors, with shape (batch_size, output_dim)
-                        batch_src_node_embeddings, batch_dst_node_embeddings = model[
-                            0
-                        ].compute_src_dst_node_temporal_embeddings(
-                            src_node_ids=batch_src_node_ids,
-                            dst_node_ids=batch_dst_node_ids,
-                            node_interact_times=batch_node_interact_times,
-                            num_neighbors=num_neighbors,
+                        batch_src_node_embeddings, batch_dst_node_embeddings = (
+                            model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
+                                src_node_ids=batch_src_node_ids,
+                                dst_node_ids=batch_dst_node_ids,
+                                node_interact_times=batch_node_interact_times,
+                                num_neighbors=num_neighbors,
+                            )
                         )
 
                     elif model_name in ["GraphMixer"]:
                         # get temporal embedding of source and destination nodes
                         # two Tensors, with shape (batch_size, output_dim)
-                        batch_src_node_embeddings, batch_dst_node_embeddings = model[
-                            0
-                        ].compute_src_dst_node_temporal_embeddings(
-                            src_node_ids=batch_src_node_ids,
-                            dst_node_ids=batch_dst_node_ids,
-                            node_interact_times=batch_node_interact_times,
-                            num_neighbors=num_neighbors,
-                            time_gap=time_gap,
+                        batch_src_node_embeddings, batch_dst_node_embeddings = (
+                            model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
+                                src_node_ids=batch_src_node_ids,
+                                dst_node_ids=batch_dst_node_ids,
+                                node_interact_times=batch_node_interact_times,
+                                num_neighbors=num_neighbors,
+                                time_gap=time_gap,
+                            )
                         )
                     elif model_name in ["DyGFormer"]:
                         # get temporal embedding of source and destination nodes
                         # two Tensors, with shape (batch_size, output_dim)
-                        batch_src_node_embeddings, batch_dst_node_embeddings = model[
-                            0
-                        ].compute_src_dst_node_temporal_embeddings(
-                            src_node_ids=batch_src_node_ids,
-                            dst_node_ids=batch_dst_node_ids,
-                            node_interact_times=batch_node_interact_times,
+                        batch_src_node_embeddings, batch_dst_node_embeddings = (
+                            model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
+                                src_node_ids=batch_src_node_ids,
+                                dst_node_ids=batch_dst_node_ids,
+                                node_interact_times=batch_node_interact_times,
+                            )
                         )
                     else:
                         raise ValueError(f"Wrong value for model_name {model_name}!")

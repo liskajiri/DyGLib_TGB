@@ -254,15 +254,16 @@ if __name__ == "__main__":
             model = convert_to_gpu(model, device=args.device)
             # put the node raw messages of memory-based models on device
             if args.model_name in ["JODIE", "DyRep", "TGN"]:
-                for node_id, node_raw_messages in model[
-                    0
-                ].memory_bank.node_raw_messages.items():
+                for (
+                    node_id,
+                    node_raw_messages,
+                ) in model.dynamic_backbone.memory_bank.node_raw_messages.items():
                     new_node_raw_messages = []
                     for node_raw_message in node_raw_messages:
                         new_node_raw_messages.append(
                             (node_raw_message[0].to(args.device), node_raw_message[1])
                         )
-                    model[0].memory_bank.node_raw_messages[node_id] = (
+                    model.dynamic_backbone.memory_bank.node_raw_messages[node_id] = (
                         new_node_raw_messages
                     )
 

@@ -30,12 +30,142 @@ from evaluate_models_utils import evaluate_model_link_prediction
 from utils.DataLoader import get_idx_data_loader, get_link_prediction_tgb_data
 from utils.EarlyStopping import EarlyStopping
 from utils.load_configs import get_link_prediction_args
+import wandb
+
+
+def create_model(
+    args, train_data, node_raw_features, edge_raw_features, train_neighbor_sampler
+) -> TGAT | MemoryModel | CAWN | TCL | GraphMixer | DyGFormer:
+    # create model
+    if args.model_name == "TGAT":
+        dynamic_backbone = TGAT(
+            node_raw_features=node_raw_features,
+            edge_raw_features=edge_raw_features,
+            neighbor_sampler=train_neighbor_sampler,
+            time_feat_dim=args.time_feat_dim,
+            output_dim=args.output_dim,
+            num_layers=args.num_layers,
+            num_heads=args.num_heads,
+            dropout=args.dropout,
+            device=args.device,
+        )
+    elif args.model_name in ["JODIE", "DyRep", "TGN"]:
+        # four floats that represent the mean and standard deviation of source and destination node time shifts in the training data, which is used for JODIE
+        (
+            src_node_mean_time_shift,
+            src_node_std_time_shift,
+            dst_node_mean_time_shift_dst,
+            dst_node_std_time_shift,
+        ) = compute_src_dst_node_time_shifts(
+            train_data.src_node_ids,
+            train_data.dst_node_ids,
+            train_data.node_interact_times,
+        )
+        dynamic_backbone = MemoryModel(
+            node_raw_features=node_raw_features,
+            edge_raw_features=edge_raw_features,
+            neighbor_sampler=train_neighbor_sampler,
+            time_feat_dim=args.time_feat_dim,
+            output_dim=args.output_dim,
+            model_name=args.model_name,
+            num_layers=args.num_layers,
+            num_heads=args.num_heads,
+            dropout=args.dropout,
+            src_node_mean_time_shift=src_node_mean_time_shift,
+            src_node_std_time_shift=src_node_std_time_shift,
+            dst_node_mean_time_shift_dst=dst_node_mean_time_shift_dst,
+            dst_node_std_time_shift=dst_node_std_time_shift,
+            device=args.device,
+        )
+    elif args.model_name == "CAWN":
+        dynamic_backbone = CAWN(
+            node_raw_features=node_raw_features,
+            edge_raw_features=edge_raw_features,
+            neighbor_sampler=train_neighbor_sampler,
+            time_feat_dim=args.time_feat_dim,
+            position_feat_dim=args.position_feat_dim,
+            output_dim=args.output_dim,
+            walk_length=args.walk_length,
+            num_walk_heads=args.num_walk_heads,
+            dropout=args.dropout,
+            device=args.device,
+        )
+    elif args.model_name == "TCL":
+        dynamic_backbone = TCL(
+            node_raw_features=node_raw_features,
+            edge_raw_features=edge_raw_features,
+            neighbor_sampler=train_neighbor_sampler,
+            time_feat_dim=args.time_feat_dim,
+            output_dim=args.output_dim,
+            num_layers=args.num_layers,
+            num_heads=args.num_heads,
+            num_depths=args.num_neighbors + 1,
+            dropout=args.dropout,
+            device=args.device,
+        )
+    elif args.model_name == "GraphMixer":
+        dynamic_backbone = GraphMixer(
+            node_raw_features=node_raw_features,
+            edge_raw_features=edge_raw_features,
+            neighbor_sampler=train_neighbor_sampler,
+            time_feat_dim=args.time_feat_dim,
+            output_dim=args.output_dim,
+            num_tokens=args.num_neighbors,
+            num_layers=args.num_layers,
+            dropout=args.dropout,
+            device=args.device,
+        )
+    elif args.model_name == "DyGFormer":
+        dynamic_backbone = DyGFormer(
+            node_raw_features=node_raw_features,
+            edge_raw_features=edge_raw_features,
+            neighbor_sampler=train_neighbor_sampler,
+            time_feat_dim=args.time_feat_dim,
+            channel_embedding_dim=args.channel_embedding_dim,
+            output_dim=args.output_dim,
+            patch_size=args.patch_size,
+            num_layers=args.num_layers,
+            num_heads=args.num_heads,
+            dropout=args.dropout,
+            max_input_sequence_length=args.max_input_sequence_length,
+            device=args.device,
+        )
+    else:
+        raise ValueError(f"Wrong value for model_name {args.model_name}!")
+    return dynamic_backbone
+
+
+class FullLinkModel(torch.nn.Module):
+    def __init__(self, dynamic_backbone, args):
+        super(FullLinkModel, self).__init__()
+        self.dynamic_backbone = dynamic_backbone
+        self.link_predictor = MergeLayer(
+            input_dim1=args.output_dim,
+            input_dim2=args.output_dim,
+            hidden_dim=args.output_dim,
+            output_dim=1,
+        )
+        self.model = nn.Sequential(self.dynamic_backbone, self.link_predictor)
+
+    def forward(self, x):
+        return self.model(x)
+
+
+def log_metrics(metrics, stage: str):
+    for metric_name in metrics[0].keys():
+        mean_metric = np.mean([val_metric[metric_name] for val_metric in metrics])
+        # logger.info(f"{stage} {metric_name}, {mean_metric:.4f}")
+        wandb.log({f"{stage}/{metric_name}": mean_metric})
+
 
 if __name__ == "__main__":
     warnings.filterwarnings("ignore")
 
     # get arguments
     args = get_link_prediction_args(is_evaluation=False)
+
+    wandb.login()
+    wandb.init(project=args.dataset_name, config=args, name=args.model_name)
 
     # get data for training, validation and testing
     (
@@ -140,108 +270,16 @@ if __name__ == "__main__":
         logger.info(f"configuration is {args}")
 
         # create model
-        if args.model_name == "TGAT":
-            dynamic_backbone = TGAT(
-                node_raw_features=node_raw_features,
-                edge_raw_features=edge_raw_features,
-                neighbor_sampler=train_neighbor_sampler,
-                time_feat_dim=args.time_feat_dim,
-                output_dim=args.output_dim,
-                num_layers=args.num_layers,
-                num_heads=args.num_heads,
-                dropout=args.dropout,
-                device=args.device,
-            )
-        elif args.model_name in ["JODIE", "DyRep", "TGN"]:
-            # four floats that represent the mean and standard deviation of source and destination node time shifts in the training data, which is used for JODIE
-            (
-                src_node_mean_time_shift,
-                src_node_std_time_shift,
-                dst_node_mean_time_shift_dst,
-                dst_node_std_time_shift,
-            ) = compute_src_dst_node_time_shifts(
-                train_data.src_node_ids,
-                train_data.dst_node_ids,
-                train_data.node_interact_times,
-            )
-            dynamic_backbone = MemoryModel(
-                node_raw_features=node_raw_features,
-                edge_raw_features=edge_raw_features,
-                neighbor_sampler=train_neighbor_sampler,
-                time_feat_dim=args.time_feat_dim,
-                output_dim=args.output_dim,
-                model_name=args.model_name,
-                num_layers=args.num_layers,
-                num_heads=args.num_heads,
-                dropout=args.dropout,
-                src_node_mean_time_shift=src_node_mean_time_shift,
-                src_node_std_time_shift=src_node_std_time_shift,
-                dst_node_mean_time_shift_dst=dst_node_mean_time_shift_dst,
-                dst_node_std_time_shift=dst_node_std_time_shift,
-                device=args.device,
-            )
-        elif args.model_name == "CAWN":
-            dynamic_backbone = CAWN(
-                node_raw_features=node_raw_features,
-                edge_raw_features=edge_raw_features,
-                neighbor_sampler=train_neighbor_sampler,
-                time_feat_dim=args.time_feat_dim,
-                position_feat_dim=args.position_feat_dim,
-                output_dim=args.output_dim,
-                walk_length=args.walk_length,
-                num_walk_heads=args.num_walk_heads,
-                dropout=args.dropout,
-                device=args.device,
-            )
-        elif args.model_name == "TCL":
-            dynamic_backbone = TCL(
-                node_raw_features=node_raw_features,
-                edge_raw_features=edge_raw_features,
-                neighbor_sampler=train_neighbor_sampler,
-                time_feat_dim=args.time_feat_dim,
-                output_dim=args.output_dim,
-                num_layers=args.num_layers,
-                num_heads=args.num_heads,
-                num_depths=args.num_neighbors + 1,
-                dropout=args.dropout,
-                device=args.device,
-            )
-        elif args.model_name == "GraphMixer":
-            dynamic_backbone = GraphMixer(
-                node_raw_features=node_raw_features,
-                edge_raw_features=edge_raw_features,
-                neighbor_sampler=train_neighbor_sampler,
-                time_feat_dim=args.time_feat_dim,
-                output_dim=args.output_dim,
-                num_tokens=args.num_neighbors,
-                num_layers=args.num_layers,
-                dropout=args.dropout,
-                device=args.device,
-            )
-        elif args.model_name == "DyGFormer":
-            dynamic_backbone = DyGFormer(
-                node_raw_features=node_raw_features,
-                edge_raw_features=edge_raw_features,
-                neighbor_sampler=train_neighbor_sampler,
-                time_feat_dim=args.time_feat_dim,
-                channel_embedding_dim=args.channel_embedding_dim,
-                output_dim=args.output_dim,
-                patch_size=args.patch_size,
-                num_layers=args.num_layers,
-                num_heads=args.num_heads,
-                dropout=args.dropout,
-                max_input_sequence_length=args.max_input_sequence_length,
-                device=args.device,
-            )
-        else:
-            raise ValueError(f"Wrong value for model_name {args.model_name}!")
-        link_predictor = MergeLayer(
-            input_dim1=args.output_dim,
-            input_dim2=args.output_dim,
-            hidden_dim=args.output_dim,
-            output_dim=1,
+        dynamic_backbone = create_model(
+            args=args,
+            train_data=train_data,
+            node_raw_features=node_raw_features,
+            edge_raw_features=edge_raw_features,
+            train_neighbor_sampler=train_neighbor_sampler,
         )
-        model = nn.Sequential(dynamic_backbone, link_predictor)
+        model = FullLinkModel(dynamic_backbone=dynamic_backbone, args=args)
+        model = torch.compile(model)
+
         logger.info(f"model -> {model}")
         logger.info(
             f"model name: {args.model_name}, #parameters: {get_parameter_sizes(model) * 4} B, "
@@ -284,10 +322,10 @@ if __name__ == "__main__":
                 "DyGFormer",
             ]:
                 # training, only use training graph
-                model[0].set_neighbor_sampler(train_neighbor_sampler)
+                model.dynamic_backbone.set_neighbor_sampler(train_neighbor_sampler)
             if args.model_name in ["JODIE", "DyRep", "TGN"]:
                 # reinitialize memory of memory-based models at the start of each epoch
-                model[0].memory_bank.__init_memory_bank__()
+                model.dynamic_backbone.memory_bank.__init_memory_bank__()
 
             # store train losses and metrics
             train_losses, train_metrics = [], []
@@ -316,21 +354,19 @@ if __name__ == "__main__":
                 if args.model_name in ["TGAT", "CAWN", "TCL"]:
                     # get temporal embedding of source and destination nodes
                     # two Tensors, with shape (batch_size, output_dim)
-                    batch_src_node_embeddings, batch_dst_node_embeddings = model[
-                        0
-                    ].compute_src_dst_node_temporal_embeddings(
-                        src_node_ids=batch_src_node_ids,
-                        dst_node_ids=batch_dst_node_ids,
-                        node_interact_times=batch_node_interact_times,
-                        num_neighbors=args.num_neighbors,
+                    batch_src_node_embeddings, batch_dst_node_embeddings = (
+                        model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
+                            src_node_ids=batch_src_node_ids,
+                            dst_node_ids=batch_dst_node_ids,
+                            node_interact_times=batch_node_interact_times,
+                            num_neighbors=args.num_neighbors,
+                        )
                     )
 
                     # get temporal embedding of negative source and negative destination nodes
                     # two Tensors, with shape (batch_size, output_dim)
                     batch_neg_src_node_embeddings, batch_neg_dst_node_embeddings = (
-                        model[
-                            0
-                        ].compute_src_dst_node_temporal_embeddings(
+                        model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
                             src_node_ids=batch_neg_src_node_ids,
                             dst_node_ids=batch_neg_dst_node_ids,
                             node_interact_times=batch_node_interact_times,
@@ -343,9 +379,7 @@ if __name__ == "__main__":
                     # get temporal embedding of negative source and negative destination nodes
                     # two Tensors, with shape (batch_size, output_dim)
                     batch_neg_src_node_embeddings, batch_neg_dst_node_embeddings = (
-                        model[
-                            0
-                        ].compute_src_dst_node_temporal_embeddings(
+                        model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
                             src_node_ids=batch_neg_src_node_ids,
                             dst_node_ids=batch_neg_dst_node_ids,
                             node_interact_times=batch_node_interact_times,
@@ -357,35 +391,33 @@ if __name__ == "__main__":
 
                     # get temporal embedding of source and destination nodes
                     # two Tensors, with shape (batch_size, output_dim)
-                    batch_src_node_embeddings, batch_dst_node_embeddings = model[
-                        0
-                    ].compute_src_dst_node_temporal_embeddings(
-                        src_node_ids=batch_src_node_ids,
-                        dst_node_ids=batch_dst_node_ids,
-                        node_interact_times=batch_node_interact_times,
-                        edge_ids=batch_edge_ids,
-                        edges_are_positive=True,
-                        num_neighbors=args.num_neighbors,
+                    batch_src_node_embeddings, batch_dst_node_embeddings = (
+                        model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
+                            src_node_ids=batch_src_node_ids,
+                            dst_node_ids=batch_dst_node_ids,
+                            node_interact_times=batch_node_interact_times,
+                            edge_ids=batch_edge_ids,
+                            edges_are_positive=True,
+                            num_neighbors=args.num_neighbors,
+                        )
                     )
                 elif args.model_name in ["GraphMixer"]:
                     # get temporal embedding of source and destination nodes
                     # two Tensors, with shape (batch_size, output_dim)
-                    batch_src_node_embeddings, batch_dst_node_embeddings = model[
-                        0
-                    ].compute_src_dst_node_temporal_embeddings(
-                        src_node_ids=batch_src_node_ids,
-                        dst_node_ids=batch_dst_node_ids,
-                        node_interact_times=batch_node_interact_times,
-                        num_neighbors=args.num_neighbors,
-                        time_gap=args.time_gap,
+                    batch_src_node_embeddings, batch_dst_node_embeddings = (
+                        model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
+                            src_node_ids=batch_src_node_ids,
+                            dst_node_ids=batch_dst_node_ids,
+                            node_interact_times=batch_node_interact_times,
+                            num_neighbors=args.num_neighbors,
+                            time_gap=args.time_gap,
+                        )
                     )
 
                     # get temporal embedding of negative source and negative destination nodes
                     # two Tensors, with shape (batch_size, output_dim)
                     batch_neg_src_node_embeddings, batch_neg_dst_node_embeddings = (
-                        model[
-                            0
-                        ].compute_src_dst_node_temporal_embeddings(
+                        model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
                             src_node_ids=batch_neg_src_node_ids,
                             dst_node_ids=batch_neg_dst_node_ids,
                             node_interact_times=batch_node_interact_times,
@@ -396,20 +428,18 @@ if __name__ == "__main__":
                 elif args.model_name in ["DyGFormer"]:
                     # get temporal embedding of source and destination nodes
                     # two Tensors, with shape (batch_size, output_dim)
-                    batch_src_node_embeddings, batch_dst_node_embeddings = model[
-                        0
-                    ].compute_src_dst_node_temporal_embeddings(
-                        src_node_ids=batch_src_node_ids,
-                        dst_node_ids=batch_dst_node_ids,
-                        node_interact_times=batch_node_interact_times,
+                    batch_src_node_embeddings, batch_dst_node_embeddings = (
+                        model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
+                            src_node_ids=batch_src_node_ids,
+                            dst_node_ids=batch_dst_node_ids,
+                            node_interact_times=batch_node_interact_times,
+                        )
                     )
 
                     # get temporal embedding of negative source and negative destination nodes
                     # two Tensors, with shape (batch_size, output_dim)
                     batch_neg_src_node_embeddings, batch_neg_dst_node_embeddings = (
-                        model[
-                            0
-                        ].compute_src_dst_node_temporal_embeddings(
+                        model.dynamic_backbone.compute_src_dst_node_temporal_embeddings(
                             src_node_ids=batch_neg_src_node_ids,
                             dst_node_ids=batch_neg_dst_node_ids,
                             node_interact_times=batch_node_interact_times,
@@ -419,7 +449,7 @@ if __name__ == "__main__":
                     raise ValueError(f"Wrong value for model_name {args.model_name}!")
                 # get positive and negative probabilities, shape (batch_size, )
                 positive_probabilities = (
-                    model[1](
+                    model.link_predictor(
                         input_1=batch_src_node_embeddings,
                         input_2=batch_dst_node_embeddings,
                     )
@@ -427,7 +457,7 @@ if __name__ == "__main__":
                     .sigmoid()
                 )
                 negative_probabilities = (
-                    model[1](
+                    model.link_predictor(
                         input_1=batch_neg_src_node_embeddings,
                         input_2=batch_neg_dst_node_embeddings,
                     )
@@ -450,18 +480,21 @@ if __name__ == "__main__":
 
                 train_losses.append(loss.item())
 
-                train_metrics.append(
-                    {
-                        "average_precision": average_precision_score(
-                            y_true=labels.cpu().numpy(),
-                            y_score=predicts.cpu().detach().numpy(),
-                        ),
-                        "roc_auc": roc_auc_score(
-                            y_true=labels.cpu().numpy(),
-                            y_score=predicts.cpu().detach().numpy(),
-                        ),
-                    }
+                precision = average_precision_score(
+                    y_true=labels.cpu().numpy(),
+                    y_score=predicts.cpu().detach().numpy(),
                 )
+                roc_auc = roc_auc_score(
+                    y_true=labels.cpu().numpy(),
+                    y_score=predicts.cpu().detach().numpy(),
+                )
+                train_metrics.append(
+                    {"average_precision": precision, "roc_auc": roc_auc}
+                )
+
+                wandb.log({"train/precision": precision})
+                wandb.log({"train/roc_auc": roc_auc})
+                wandb.log({"train/loss": loss.item()})
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -473,7 +506,7 @@ if __name__ == "__main__":
 
                 if args.model_name in ["JODIE", "DyRep", "TGN"]:
                     # detach the memories and raw messages of nodes in the memory bank after each batch, so we don't back propagate to the start of time
-                    model[0].memory_bank.detach_memory_bank()
+                    model.dynamic_backbone.memory_bank.detach_memory_bank()
 
             val_metrics = evaluate_model_link_prediction(
                 model_name=args.model_name,
@@ -491,19 +524,16 @@ if __name__ == "__main__":
 
             if args.model_name in ["JODIE", "DyRep", "TGN"]:
                 # backup memory bank after validating so it can be used for testing nodes (since test edges are strictly later in time than validation edges)
-                val_backup_memory_bank = model[0].memory_bank.backup_memory_bank()
+                val_backup_memory_bank = (
+                    model.dynamic_backbone.memory_bank.backup_memory_bank()
+                )
 
             logger.info(
                 f'Epoch: {epoch + 1}, learning rate: {optimizer.param_groups[0]["lr"]}, train loss: {np.mean(train_losses):.4f}'
             )
-            for metric_name in train_metrics[0].keys():
-                logger.info(
-                    f"train {metric_name}, {np.mean([train_metric[metric_name] for train_metric in train_metrics]):.4f}"
-                )
-            for metric_name in val_metrics[0].keys():
-                logger.info(
-                    f"validate {metric_name}, {np.mean([val_metric[metric_name] for val_metric in val_metrics]):.4f}"
-                )
+
+            log_metrics(train_metrics, "train")
+            log_metrics(val_metrics, "val")
 
             # perform testing once after test_interval_epochs
             if (epoch + 1) % args.test_interval_epochs == 0:
@@ -524,12 +554,11 @@ if __name__ == "__main__":
                 if args.model_name in ["JODIE", "DyRep", "TGN"]:
                     # reload validation memory bank for testing nodes or saving models
                     # note that since model treats memory as parameters, we need to reload the memory to val_backup_memory_bank for saving models
-                    model[0].memory_bank.reload_memory_bank(val_backup_memory_bank)
-
-                for metric_name in test_metrics[0].keys():
-                    logger.info(
-                        f"test {metric_name}, {np.mean([test_metric[metric_name] for test_metric in test_metrics]):.4f}"
+                    model.dynamic_backbone.memory_bank.reload_memory_bank(
+                        val_backup_memory_bank
                     )
+
+                log_metrics(test_metrics, "test")
 
             # select the best model based on all the validate metrics
             val_metric_indicator = []
