@@ -89,17 +89,17 @@ def get_link_prediction_args(is_evaluation: bool = False):
         help="time gap for neighbors to compute node features",
     )
     parser.add_argument(
-        "--time_feat_dim", type=int, default=100, help="dimension of the time embedding"
-    )
+        "--time_feat_dim", type=int, default=10, help="dimension of the time embedding"
+    )  # 100
     parser.add_argument(
         "--position_feat_dim",
         type=int,
-        default=172,
+        default=64,  # 172
         help="dimension of the position embedding",
     )
     parser.add_argument(
-        "--output_dim", type=int, default=172, help="dimension of the output embedding"
-    )
+        "--output_dim", type=int, default=64, help="dimension of the output embedding"
+    )  # 172
     parser.add_argument(
         "--edge_bank_memory_mode",
         type=str,
@@ -118,7 +118,7 @@ def get_link_prediction_args(is_evaluation: bool = False):
     parser.add_argument(
         "--channel_embedding_dim",
         type=int,
-        default=50,
+        default=20,
         help="dimension of each channel embedding",
     )
     parser.add_argument(
@@ -128,7 +128,7 @@ def get_link_prediction_args(is_evaluation: bool = False):
         help="maximal length of the input sequence of each node",
     )
     parser.add_argument(
-        "--learning_rate", type=float, default=0.0001, help="learning rate"
+        "--learning_rate", type=float, default=0.001, help="learning rate"
     )
     parser.add_argument("--dropout", type=float, default=0.1, help="dropout rate")
     parser.add_argument("--num_epochs", type=int, default=100, help="number of epochs")
@@ -139,11 +139,11 @@ def get_link_prediction_args(is_evaluation: bool = False):
         choices=["SGD", "Adam", "RMSprop"],
         help="name of optimizer",
     )
-    parser.add_argument("--weight_decay", type=float, default=0.0, help="weight decay")
+    parser.add_argument("--weight_decay", type=float, default=0.1, help="weight decay")
     parser.add_argument(
         "--patience", type=int, default=20, help="patience for early stopping"
     )
-    parser.add_argument("--num_runs", type=int, default=5, help="number of runs")
+    parser.add_argument("--num_runs", type=int, default=3, help="number of runs")
     parser.add_argument(
         "--test_interval_epochs",
         type=int,
@@ -259,7 +259,7 @@ def get_node_classification_args(is_evaluation: bool = False):
     parser.add_argument(
         "--num_neighbors",
         type=int,
-        default=10,  # 20
+        default=20,
         help="number of neighbors to sample for each node",
     )
     parser.add_argument(
@@ -307,7 +307,7 @@ def get_node_classification_args(is_evaluation: bool = False):
     parser.add_argument(
         "--position_feat_dim",
         type=int,
-        default=172,
+        default=64,  # 172
         help="dimension of the position embedding",
     )
     parser.add_argument(
@@ -323,7 +323,7 @@ def get_node_classification_args(is_evaluation: bool = False):
     parser.add_argument(
         "--channel_embedding_dim",
         type=int,
-        default=50,
+        default=20,
         help="dimension of each channel embedding",
     )
     parser.add_argument(
@@ -333,7 +333,7 @@ def get_node_classification_args(is_evaluation: bool = False):
         help="maximal length of the input sequence of each node",
     )
     parser.add_argument(
-        "--learning_rate", type=float, default=0.001, help="learning rate"
+        "--learning_rate", type=float, default=0.0001, help="learning rate"
     )  # 0.00001
     parser.add_argument("--dropout", type=float, default=0.1, help="dropout rate")
     parser.add_argument("--num_epochs", type=int, default=100, help="number of epochs")
@@ -344,11 +344,11 @@ def get_node_classification_args(is_evaluation: bool = False):
         choices=["SGD", "Adam", "RMSprop"],
         help="name of optimizer",
     )
-    parser.add_argument("--weight_decay", type=float, default=0.0, help="weight decay")
+    parser.add_argument("--weight_decay", type=float, default=0.1, help="weight decay")
     parser.add_argument(
         "--patience", type=int, default=20, help="patience for early stopping"
     )
-    parser.add_argument("--num_runs", type=int, default=5, help="number of runs")
+    parser.add_argument("--num_runs", type=int, default=3, help="number of runs")
     parser.add_argument(
         "--test_interval_epochs",
         type=int,
@@ -358,13 +358,13 @@ def get_node_classification_args(is_evaluation: bool = False):
     parser.add_argument(
         "--load_best_configs",
         action="store_true",
-        default=False,
+        default=True,
         help="whether to load the best configurations",
     )
     parser.add_argument(
         "--use_messages",
         type=bool,
-        default=False,
+        default=True,
         help="whether to use messages in the node classification task",
     )
 

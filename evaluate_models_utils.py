@@ -207,8 +207,8 @@ def evaluate_model_link_prediction(
                 )
                 .squeeze(dim=-1)
                 .sigmoid()
-                .cpu()
-                .numpy()
+                # .cpu()
+                # .numpy()
             )
             # get negative probabilities, Tensor, shape (batch_size * num_negative_samples_per_node, )
             negative_probabilities = (
@@ -217,8 +217,8 @@ def evaluate_model_link_prediction(
                 )
                 .squeeze(dim=-1)
                 .sigmoid()
-                .cpu()
-                .numpy()
+                # .cpu()
+                # .numpy()
             )
 
             for sample_idx in range(len(batch_src_node_ids)):

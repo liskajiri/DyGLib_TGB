@@ -788,7 +788,6 @@ class GraphAttentionEmbedding(nn.Module):
             ]
         )
 
-        # TODO: Uncomment
         assert (
             self.node_feat_dim <= self.output_dim
         ), "node_feat_dim should not be larger than output_dim!"

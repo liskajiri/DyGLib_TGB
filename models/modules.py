@@ -23,7 +23,6 @@ class TimeEncoder(nn.Module):
                 )
             ).reshape(time_dim, -1)
         )
-        self.w.bias = nn.Parameter(torch.zeros(time_dim))
 
         if not parameter_requires_grad:
             self.w.weight.requires_grad = False
@@ -39,7 +38,8 @@ class TimeEncoder(nn.Module):
         timestamps = timestamps.unsqueeze(dim=2)
 
         # Tensor, shape (batch_size, seq_len, time_dim)
-        output = torch.cos(self.w(timestamps))
+        output = self.w(timestamps)
+        output.cos_()
 
         return output
 

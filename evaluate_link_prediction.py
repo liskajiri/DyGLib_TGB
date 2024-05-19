@@ -52,29 +52,17 @@ if __name__ == "__main__":
     )
 
     # get data loaders
-    # since the version 2 of tgbl-wiki has included all possible negative destinations for each positive edge, we set batch size to 1 to reduce the memory cost
-    if args.dataset_name == "tgbl-wiki":
-        val_idx_data_loader = get_idx_data_loader(
-            indices_list=list(range(len(val_data.src_node_ids))),
-            batch_size=1,
-            shuffle=False,
-        )
-        test_idx_data_loader = get_idx_data_loader(
-            indices_list=list(range(len(test_data.src_node_ids))),
-            batch_size=1,
-            shuffle=False,
-        )
-    else:
-        val_idx_data_loader = get_idx_data_loader(
-            indices_list=list(range(len(val_data.src_node_ids))),
-            batch_size=args.batch_size,
-            shuffle=False,
-        )
-        test_idx_data_loader = get_idx_data_loader(
-            indices_list=list(range(len(test_data.src_node_ids))),
-            batch_size=args.batch_size,
-            shuffle=False,
-        )
+    args.batch_size = 1
+    val_idx_data_loader = get_idx_data_loader(
+        indices_list=list(range(len(val_data.src_node_ids))),
+        batch_size=args.batch_size,
+        shuffle=False,
+    )
+    test_idx_data_loader = get_idx_data_loader(
+        indices_list=list(range(len(test_data.src_node_ids))),
+        batch_size=args.batch_size,
+        shuffle=False,
+    )
 
     # we separately evaluate EdgeBank, since EdgeBank does not contain any trainable parameters and has a different evaluation pipeline
     if args.model_name == "EdgeBank":

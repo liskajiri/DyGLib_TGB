@@ -32,7 +32,7 @@ class CustomizedDataset(Dataset):
 
 
 def get_idx_data_loader(
-    indices_list: list, batch_size: int, shuffle: bool, num_workers: int = 16
+    indices_list: list, batch_size: int, shuffle: bool, num_workers: int = 8
 ) -> DataLoader:
     """
     get data loader that iterates over indices
@@ -122,15 +122,15 @@ def get_link_prediction_tgb_data(dataset_name: str):
 
     src_node_ids = data["sources"].astype(np.longlong)
     dst_node_ids = data["destinations"].astype(np.longlong)
-    node_interact_times = data["timestamps"].astype(np.float64)
+    node_interact_times = data["timestamps"].astype(np.float32)
     edge_ids = data["edge_idxs"].astype(np.longlong)
     labels = data["edge_label"]
-    edge_raw_features = data["edge_feat"].astype(np.float64)
+    edge_raw_features = data["edge_feat"].astype(np.float32)
     # deal with edge features whose shape has only one dimension
     if len(edge_raw_features.shape) == 1:
         edge_raw_features = edge_raw_features[:, np.newaxis]
     # currently, we do not consider edge weights
-    # edge_weights = data['w'].astype(np.float64)
+    # edge_weights = data['w'].astype(np.float32)
 
     num_edges = edge_raw_features.shape[0]
     assert (
@@ -173,7 +173,7 @@ def get_link_prediction_tgb_data(dataset_name: str):
     if "node_feat" not in data.keys():
         node_raw_features = np.zeros((num_nodes + 1, 1))
     else:
-        node_raw_features = data["node_feat"].astype(np.float64)
+        node_raw_features = data["node_feat"].astype(np.float32)
         # deal with node features whose shape has only one dimension
         if len(node_raw_features.shape) == 1:
             node_raw_features = node_raw_features[:, np.newaxis]
@@ -268,9 +268,9 @@ def get_node_classification_tgb_data(dataset_name: str):
 
     src_node_ids = data["sources"].astype(np.longlong)
     dst_node_ids = data["destinations"].astype(np.longlong)
-    node_interact_times = data["timestamps"].astype(np.float64)
+    node_interact_times = data["timestamps"].astype(np.float32)
     edge_ids = data["edge_idxs"].astype(np.longlong)
-    edge_raw_features = data["edge_feat"].astype(np.float64)
+    edge_raw_features = data["edge_feat"].astype(np.float32)
     # deal with edge features whose shape has only one dimension
     if len(edge_raw_features.shape) == 1:
         edge_raw_features = edge_raw_features[:, np.newaxis]
@@ -310,7 +310,7 @@ def get_node_classification_tgb_data(dataset_name: str):
     # dictionary, key is interact time, value is a dictionary, whose key is node id, value is node label, which is a ndarray with shape (num_classes, )
     label_dict = dataset.dataset.label_dict
 
-    # dictionary, key is a tuple (label time, node id), value is the node label, which is a ndarray (each element is float64 type) with shape (num_classes, )
+    # dictionary, key is a tuple (label time, node id), value is the node label, which is a ndarray (each element is float32 type) with shape (num_classes, )
     converted_label_dict = {}
     for node_label_time in tqdm(label_dict.keys()):
         for src_node_id in label_dict[node_label_time].keys():
@@ -398,7 +398,7 @@ def get_node_classification_tgb_data(dataset_name: str):
     if "node_feat" not in data.keys():
         node_raw_features = np.zeros((num_nodes + 1, 1))
     else:
-        node_raw_features = data["node_feat"].astype(np.float64)
+        node_raw_features = data["node_feat"].astype(np.float32)
         # deal with node features whose shape has only one dimension
         if len(node_raw_features.shape) == 1:
             node_raw_features = node_raw_features[:, np.newaxis]
